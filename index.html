@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>BaseCalc — Scientific Calculator × Mini App Builder</title>
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;700;800&display=swap" rel="stylesheet" />
+
+<!-- ethers v6 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.1/ethers.umd.min.js"></script>
+
+<style>
+  /* ── Reset & vars ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #06060a;
+    --surface:  #0e0e18;
+    --border:   #1e1e32;
+    --accent:   #0052ff;   /* Base blue */
+    --accent2:  #00d4ff;
+    --txt:      #e8e8f0;
+    --muted:    #5a5a7a;
+    --green:    #00e676;
+    --red:      #ff3d71;
+    --radius:   12px;
+    --mono:     'Space Mono', monospace;
+    --display:  'Syne', sans-serif;
+  }
+
+  html, body { height: 100%; background: var(--bg); color: var(--txt); font-family: var(--display); overflow-x: hidden; }
+
+  /* ── Grid bg ── */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background-image:
+      linear-gradient(rgba(0,82,255,.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,82,255,.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+
+  /* ── Layout ── */
+  #root { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 28px;
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+    background: rgba(6,6,10,.8);
+    position: sticky; top: 0; z-index: 100;
+  }
+
+  .logo { font-size: 1.3rem; font-weight: 800; letter-spacing: -1px; }
+  .logo span { color: var(--accent2); }
+
+  #connectBtn {
+    font-family: var(--mono);
+    font-size: .75rem;
+    padding: 9px 18px;
+    border-radius: 99px;
+    border: 1.5px solid var(--accent);
+    background: transparent;
+    color: var(--accent2);
+    cursor: pointer;
+    transition: all .2s;
+    white-space: nowrap;
+  }
+  #connectBtn:hover { background: var(--accent); color: #fff; }
+  #connectBtn.connected { border-color: var(--green); color: var(--green); }
+
+  /* ── Tabs ── */
+  .tabs {
+    display: flex; gap: 4px;
+    padding: 20px 28px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    font-family: var(--mono);
+    font-size: .78rem;
+    letter-spacing: .05em;
+    padding: 10px 20px;
+    border-radius: var(--radius) var(--radius) 0 0;
+    border: 1px solid transparent;
+    border-bottom: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .tab.active {
+    background: var(--surface);
+    border-color: var(--border);
+    color: var(--accent2);
+    border-bottom-color: var(--surface);
+    margin-bottom: -1px;
+    z-index: 1;
+  }
+
+  .panel { display: none; padding: 28px; flex: 1; }
+  .panel.active { display: flex; flex-direction: column; gap: 24px; }
+
+  /* ── Calculator ── */
+  .calc-wrap {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    max-width: 900px;
+  }
+
+  @media (max-width: 700px) { .calc-wrap { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+  }
+  .card-title {
+    font-size: .65rem;
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+  }
+
+  /* display */
+  #display {
+    background: #08081a;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    font-family: var(--mono);
+    font-size: 2rem;
+    color: var(--accent2);
+    text-align: right;
+    min-height: 68px;
+    word-break: break-all;
+    margin-bottom: 14px;
+    grid-column: 1 / -1;
+    transition: color .2s;
+  }
+  #display.err { color: var(--red); }
+
+  /* button grid */
+  .btn-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 7px;
+  }
+  .btn {
+    font-family: var(--mono);
+    font-size: .8rem;
+    padding: 14px 6px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #0e0e1f;
+    color: var(--txt);
+    cursor: pointer;
+    transition: all .15s;
+    user-select: none;
+  }
+  .btn:hover { background: #1a1a2e; border-color: var(--accent); color: var(--accent2); transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn.op  { color: var(--accent2); border-color: #1a2a4a; }
+  .btn.fn  { color: #b8a0ff; border-color: #2a1a4a; }
+  .btn.eq  { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+  .btn.eq:hover { background: #0040cc; }
+  .btn.clear { color: var(--red); border-color: #3a1a1a; }
+  .btn.wide { grid-column: span 2; }
+
+  /* tx status */
+  #txStatus {
+    font-family: var(--mono);
+    font-size: .72rem;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: #08081a;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    min-height: 38px;
+    display: flex; align-items: center; gap: 8px;
+    grid-column: 1 / -1;
+    word-break: break-all;
+  }
+  #txStatus .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--muted); flex-shrink: 0;
+  }
+  #txStatus.pending .dot { background: #ffd600; animation: pulse 1s infinite; }
+  #txStatus.success .dot { background: var(--green); }
+  #txStatus.fail .dot    { background: var(--red); }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  /* history */
+  .history-list { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+  .history-item {
+    font-family: var(--mono);
+    font-size: .72rem;
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: #08081a;
+    border: 1px solid var(--border);
+    color: var(--muted);
+  }
+  .history-item .op-tag {
+    background: var(--accent);
+    color: #fff;
+    font-size: .6rem;
+    padding: 2px 7px;
+    border-radius: 99px;
+    flex-shrink: 0;
+  }
+  .history-item .res { color: var(--accent2); }
+
+  /* ── Mini App Builder ── */
+  .builder-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 1000px; }
+  @media(max-width: 780px){ .builder-wrap { grid-template-columns: 1fr; } }
+
+  .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+  .form-group label { font-size: .65rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .form-group input, .form-group textarea, .form-group select {
+    font-family: var(--mono);
+    font-size: .82rem;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #08081a;
+    color: var(--txt);
+    outline: none;
+    transition: border-color .2s;
+    resize: vertical;
+  }
+  .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+    border-color: var(--accent);
+  }
+
+  .primary-btn {
+    font-family: var(--mono);
+    font-size: .8rem;
+    padding: 12px 24px;
+    border-radius: 8px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+    transition: all .2s;
+    letter-spacing: .05em;
+  }
+  .primary-btn:hover { background: #0040cc; transform: translateY(-1px); }
+  .primary-btn:disabled { background: var(--muted); cursor: not-allowed; transform: none; }
+
+  /* app cards */
+  .apps-grid { display: flex; flex-direction: column; gap: 10px; max-height: 420px; overflow-y: auto; }
+  .app-card {
+    padding: 14px 16px;
+    border-radius: var(--radius);
+    background: #08081a;
+    border: 1px solid var(--border);
+    transition: border-color .2s;
+  }
+  .app-card:hover { border-color: var(--accent); }
+  .app-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .app-card-name { font-weight: 700; font-size: .95rem; }
+  .app-badge {
+    font-family: var(--mono);
+    font-size: .6rem;
+    padding: 3px 9px;
+    border-radius: 99px;
+    border: 1px solid var(--green);
+    color: var(--green);
+  }
+  .app-badge.inactive { border-color: var(--muted); color: var(--muted); }
+  .app-config {
+    font-family: var(--mono);
+    font-size: .68rem;
+    color: var(--muted);
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 80px;
+    overflow: hidden;
+    line-height: 1.6;
+  }
+  .app-meta { font-family: var(--mono); font-size: .62rem; color: var(--muted); margin-top: 8px; }
+
+  /* preview panel */
+  #previewFrame {
+    width: 100%;
+    min-height: 280px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: #fff;
+    margin-top: 12px;
+  }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed; bottom: 28px; right: 28px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 20px;
+    font-family: var(--mono);
+    font-size: .78rem;
+    color: var(--txt);
+    z-index: 9999;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all .3s cubic-bezier(.4,0,.2,1);
+    max-width: 360px;
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.success { border-color: var(--green); color: var(--green); }
+  #toast.error   { border-color: var(--red);   color: var(--red);   }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+  /* spinner */
+  .spin { display: inline-block; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="root">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">Base<span>Calc</span> ×<span> Builder</span></div>
+    <button id="connectBtn" onclick="connectWallet()">Connect Wallet</button>
+  </header>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('calc',this)">⊞ Calculator</button>
+    <button class="tab" onclick="switchTab('builder',this)">⬡ Mini App Builder</button>
+    <button class="tab" onclick="switchTab('history',this)">◷ On-Chain History</button>
+  </div>
+
+  <!-- ══════════════ CALCULATOR ══════════════ -->
+  <div id="panel-calc" class="panel active">
+    <div class="calc-wrap">
+
+      <div id="display">0</div>
+
+      <!-- button grid -->
+      <div class="card" style="grid-column:1 / -1; padding:16px;">
+        <div class="btn-grid">
+          <!-- row 1 -->
+          <button class="btn fn" onclick="calcFn('sin')">sin</button>
+          <button class="btn fn" onclick="calcFn('cos')">cos</button>
+          <button class="btn fn" onclick="calcFn('tan')">tan</button>
+          <button class="btn fn" onclick="calcFn('log')">log₁₀</button>
+          <button class="btn fn" onclick="calcFn('ln')">ln</button>
+          <!-- row 2 -->
+          <button class="btn fn" onclick="calcFn('sqrt')">√</button>
+          <button class="btn fn" onclick="calcFn('pow2')">x²</button>
+          <button class="btn fn" onclick="calcFn('pow3')">x³</button>
+          <button class="btn fn" onclick="appendOp('^')">xⁿ</button>
+          <button class="btn fn" onclick="calcFn('inv')">1/x</button>
+          <!-- row 3 -->
+          <button class="btn fn" onclick="appendConst('π')">π</button>
+          <button class="btn fn" onclick="appendConst('e')">e</button>
+          <button class="btn fn" onclick="calcFn('abs')">|x|</button>
+          <button class="btn fn" onclick="calcFn('fact')">n!</button>
+          <button class="btn fn" onclick="appendOp('%')">mod</button>
+          <!-- row 4 -->
+          <button class="btn clear" onclick="clearAll()">AC</button>
+          <button class="btn" onclick="toggleSign()">+/−</button>
+          <button class="btn" onclick="appendVal('(')"> ( </button>
+          <button class="btn" onclick="appendVal(')')"> ) </button>
+          <button class="btn op" onclick="appendOp('/')">÷</button>
+          <!-- row 5 -->
+          <button class="btn" onclick="appendVal('7')">7</button>
+          <button class="btn" onclick="appendVal('8')">8</button>
+          <button class="btn" onclick="appendVal('9')">9</button>
+          <button class="btn op" onclick="appendOp('*')">×</button>
+          <button class="btn op" onclick="appendOp('-')">−</button>
+          <!-- row 6 -->
+          <button class="btn" onclick="appendVal('4')">4</button>
+          <button class="btn" onclick="appendVal('5')">5</button>
+          <button class="btn" onclick="appendVal('6')">6</button>
+          <button class="btn op" onclick="appendOp('+')">+</button>
+          <button class="btn fn" onclick="deleteLast()">⌫</button>
+          <!-- row 7 -->
+          <button class="btn" onclick="appendVal('1')">1</button>
+          <button class="btn" onclick="appendVal('2')">2</button>
+          <button class="btn" onclick="appendVal('3')">3</button>
+          <button class="btn" onclick="appendVal('.')">.</button>
+          <button class="btn eq" onclick="evaluate()" style="grid-row: span 2">= </button>
+          <!-- row 8 -->
+          <button class="btn wide" onclick="appendVal('0')">0</button>
+          <button class="btn fn" onclick="calcFn('exp')">eˣ</button>
+          <button class="btn fn" onclick="calcFn('floor')">⌊x⌋</button>
+        </div>
+      </div>
+
+      <!-- tx status -->
+      <div id="txStatus" style="grid-column:1/-1;">
+        <span class="dot"></span>
+        <span id="txMsg">Connect wallet to log computations on Base.</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════ MINI APP BUILDER ══════════════ -->
+  <div id="panel-builder" class="panel">
+    <div class="builder-wrap">
+
+      <!-- Form -->
+      <div class="card">
+        <div class="card-title">Deploy Mini App</div>
+
+        <div class="form-group">
+          <label>App Name</label>
+          <input id="appName" type="text" placeholder="My Awesome DApp" />
+        </div>
+
+        <div class="form-group">
+          <label>Component Template</label>
+          <select id="appTemplate" onchange="loadTemplate()">
+            <option value="">— choose a template —</option>
+            <option value="counter">Counter Widget</option>
+            <option value="swap">Token Swap UI</option>
+            <option value="nft">NFT Showcase Card</option>
+            <option value="vote">DAO Vote Widget</option>
+            <option value="custom">Custom (edit below)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Config JSON (stored on-chain)</label>
+          <textarea id="appConfig" rows="8" placeholder='{"components":[],"theme":"dark"}'></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>HTML Preview (live)</label>
+          <textarea id="appHtml" rows="6" placeholder="<div>...</div>" oninput="updatePreview()"></textarea>
+        </div>
+
+        <button class="primary-btn" onclick="deployApp()" id="deployBtn">⬡ Deploy to Base</button>
+      </div>
+
+      <!-- Preview + Apps list -->
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div class="card" style="flex:0 0 auto;">
+          <div class="card-title">Live Preview</div>
+          <iframe id="previewFrame" sandbox="allow-scripts" srcdoc="<p style='padding:20px;color:#666;font-family:monospace'>HTML preview will appear here…</p>"></iframe>
+        </div>
+
+        <div class="card" style="flex:1;">
+          <div class="card-title">Deployed Apps <span id="appCount" style="color:var(--accent2);margin-left:6px;">—</span></div>
+          <div class="apps-grid" id="appsList">
+            <p style="font-family:var(--mono);font-size:.75rem;color:var(--muted);">Connect wallet to see your apps.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════ ON-CHAIN HISTORY ══════════════ -->
+  <div id="panel-history" class="panel">
+    <div style="max-width:700px;">
+      <div class="card">
+        <div class="card-title">Your Computation History</div>
+        <div class="history-list" id="historyList">
+          <p style="font-family:var(--mono);font-size:.75rem;color:var(--muted);">Connect wallet & compute something.</p>
+        </div>
+        <div style="margin-top:12px;">
+          <button class="primary-btn" onclick="loadHistory()" style="font-size:.75rem;padding:9px 18px;">↻ Refresh</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /root -->
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+//  CONFIG — replace CONTRACT_ADDRESS after deploy
+// ══════════════════════════════════════════════
+const CONTRACT_ADDRESS = "0xEbA40303eA3FD39Ccd0F8B6F83428ee1731f73fd";
+const BASE_CHAIN_ID = "0x2105"; // 8453 decimal
+
+const ABI = [
+  "function add(int256 a, int256 b) returns (int256)",
+  "function subtract(int256 a, int256 b) returns (int256)",
+  "function multiply(int256 a, int256 b) returns (int256)",
+  "function divide(int256 a, int256 b) returns (int256)",
+  "function modulo(int256 a, int256 b) returns (int256)",
+  "function power(int256 base, uint8 exp) returns (int256)",
+  "function sqrt(int256 a) returns (int256)",
+  "function deployMiniApp(string name, string config) returns (uint256)",
+  "function toggleMiniApp(uint256 appId)",
+  "function getHistoryLength() view returns (uint256)",
+  "function getMiniAppsCount() view returns (uint256)",
+  "function getUserComputations(address user) view returns (uint256[])",
+  "function getUserApps(address user) view returns (uint256[])",
+  "function history(uint256) view returns (address,string,int256,int256,int256,uint256)",
+  "function miniApps(uint256) view returns (address,string,string,uint256,bool)",
+  "event Computed(address indexed user,string operation,int256 operandA,int256 operandB,int256 result,uint256 timestamp)",
+  "event MiniAppDeployed(address indexed owner,string appName,string appConfig,uint256 timestamp)"
+];
+
+// ══════════════════════════════════════════════
+//  State
+// ══════════════════════════════════════════════
+let provider, signer, contract;
+let walletAddress = null;
+let expression = "";
+let lastResult = null;
+const SCALE = 1_000_000n;
+
+// ══════════════════════════════════════════════
+//  Wallet
+// ══════════════════════════════════════════════
+async function connectWallet() {
+  if (!window.ethereum) { showToast("Install MetaMask or Coinbase Wallet", "error"); return; }
+  try {
+    await window.ethereum.request({ method: "eth_requestAccounts" });
+
+    // switch to Base
+    try {
+      await window.ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: BASE_CHAIN_ID }]
+      });
+    } catch(sw) {
+      if (sw.code === 4902) {
+        await window.ethereum.request({
+          method: "wallet_addEthereumChain",
+          params: [{
+            chainId: BASE_CHAIN_ID,
+            chainName: "Base",
+            nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+            rpcUrls: ["https://mainnet.base.org"],
+            blockExplorerUrls: ["https://basescan.org"]
+          }]
+        });
+      }
+    }
+
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer   = await provider.getSigner();
+    walletAddress = await signer.getAddress();
+    contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+
+    const btn = document.getElementById("connectBtn");
+    btn.textContent = walletAddress.slice(0,6)+"…"+walletAddress.slice(-4);
+    btn.classList.add("connected");
+
+    setTxStatus("idle", `Connected: ${walletAddress.slice(0,8)}… on Base ⬡`);
+    showToast("Wallet connected on Base ✓", "success");
+    loadHistory();
+    loadApps();
+  } catch(e) {
+    showToast(e.message || "Connection failed", "error");
+  }
+}
+
+// ══════════════════════════════════════════════
+//  Calculator logic
+// ══════════════════════════════════════════════
+function updateDisplay(val, err=false) {
+  const d = document.getElementById("display");
+  d.textContent = val || "0";
+  d.classList.toggle("err", err);
+}
+
+function appendVal(v) {
+  if (expression === "0" && v !== ".") expression = "";
+  expression += v;
+  updateDisplay(expression);
+}
+
+function appendOp(op) {
+  if (!expression) expression = lastResult !== null ? String(lastResult) : "0";
+  expression += op;
+  updateDisplay(expression);
+}
+
+function appendConst(c) {
+  const map = { π: Math.PI.toString(), e: Math.E.toString() };
+  expression += map[c];
+  updateDisplay(expression);
+}
+
+function clearAll() { expression = ""; lastResult = null; updateDisplay("0"); }
+function deleteLast() { expression = expression.slice(0,-1); updateDisplay(expression || "0"); }
+function toggleSign() {
+  if (!expression) return;
+  expression = expression.startsWith("-") ? expression.slice(1) : "-" + expression;
+  updateDisplay(expression);
+}
+
+function calcFn(fn) {
+  const val = expression ? parseFloat(expression) : 0;
+  let result;
+  try {
+    switch(fn) {
+      case "sin":   result = Math.sin(val * Math.PI/180); break;
+      case "cos":   result = Math.cos(val * Math.PI/180); break;
+      case "tan":   result = Math.tan(val * Math.PI/180); break;
+      case "log":   result = Math.log10(val); break;
+      case "ln":    result = Math.log(val); break;
+      case "sqrt":  result = Math.sqrt(val); submitToChain("sqrt", val, 0); return;
+      case "pow2":  result = val * val; submitToChain("power", val, 2); return;
+      case "pow3":  result = val * val * val; submitToChain("power", val, 3); return;
+      case "inv":   result = 1 / val; submitToChain("divide", 1, val); return;
+      case "abs":   result = Math.abs(val); break;
+      case "fact":  result = factorial(Math.round(val)); break;
+      case "exp":   result = Math.exp(val); break;
+      case "floor": result = Math.floor(val); break;
+    }
+    lastResult = result;
+    expression = String(result);
+    updateDisplay(formatResult(result));
+    submitToChain("custom", val, 0, result, fn.toUpperCase());
+  } catch(e) { updateDisplay("Error", true); }
+}
+
+function factorial(n) {
+  if (n < 0) throw new Error("Negative");
+  if (n === 0 || n === 1) return 1;
+  let r = 1;
+  for (let i=2; i<=n; i++) r *= i;
+  return r;
+}
+
+function formatResult(n) {
+  if (isNaN(n) || !isFinite(n)) return "Error";
+  return parseFloat(n.toPrecision(10)).toString();
+}
+
+async function evaluate() {
+  if (!expression) return;
+  let expr = expression
+    .replace(/×/g,'*').replace(/÷/g,'/')
+    .replace(/\^/g,'**').replace(/%/g,'%');
+  let result;
+  try {
+    // Safe eval via Function
+    result = Function('"use strict"; return (' + expr + ')')();
+    lastResult = result;
+    expression = String(result);
+    updateDisplay(formatResult(result));
+    await autoSendToChain(expr, result);
+  } catch(e) { updateDisplay("Error", true); }
+}
+
+// Detect operation and send to chain
+async function autoSendToChain(expr, result) {
+  if (!contract || !walletAddress) return;
+  // Try to detect last operation
+  const addM = expr.match(/^(-?[\d.]+)\+(-?[\d.]+)$/);
+  const subM = expr.match(/^(-?[\d.]+)-(-?[\d.]+)$/);
+  const mulM = expr.match(/^(-?[\d.]+)\*(-?[\d.]+)$/);
+  const divM = expr.match(/^(-?[\d.]+)\/(-?[\d.]+)$/);
+  const modM = expr.match(/^(-?[\d.]+)%(-?[\d.]+)$/);
+  const powM = expr.match(/^(-?[\d.]+)\*\*(\d+)$/);
+
+  if (addM)      await submitToChain("add",      +addM[1], +addM[2]);
+  else if (subM) await submitToChain("subtract",  +subM[1], +subM[2]);
+  else if (mulM) await submitToChain("multiply",  +mulM[1], +mulM[2]);
+  else if (divM) await submitToChain("divide",    +divM[1], +divM[2]);
+  else if (modM) await submitToChain("modulo",    +modM[1], +modM[2]);
+  else if (powM) await submitToChain("power",     +powM[1], +powM[2]);
+  else           await submitToChain("custom",    parseFloat(expr)||0, 0, result, "EXPR");
+}
+
+async function submitToChain(op, a, b, localResult, label) {
+  if (!contract) { setTxStatus("idle","Connect wallet to log on Base"); return; }
+  setTxStatus("pending","Sending to Base…");
+  try {
+    const toScaled = v => BigInt(Math.round(Number(v) * 1_000_000));
+    let tx;
+    switch(op) {
+      case "add":      tx = await contract.add(toScaled(a), toScaled(b)); break;
+      case "subtract": tx = await contract.subtract(toScaled(a), toScaled(b)); break;
+      case "multiply": tx = await contract.multiply(toScaled(a), toScaled(b)); break;
+      case "divide":   tx = await contract.divide(toScaled(a), toScaled(b)); break;
+      case "modulo":   tx = await contract.modulo(toScaled(a), toScaled(b)); break;
+      case "power":    tx = await contract.power(toScaled(a), Math.round(b)); break;
+      case "sqrt":     tx = await contract.sqrt(toScaled(a)); break;
+      default:         tx = await contract.add(toScaled(a||0), toScaled(0)); break;
+    }
+    setTxStatus("pending",`Tx sent: ${tx.hash.slice(0,14)}…`);
+    const receipt = await tx.wait();
+    const short = tx.hash.slice(0,10)+"…"+tx.hash.slice(-6);
+    setTxStatus("success",`✓ Confirmed | ${short} | Block ${receipt.blockNumber}`);
+    showToast(`✓ ${(label||op).toUpperCase()} logged on Base`, "success");
+    addToLocalHistory(label||op, a, b, localResult ?? 0);
+  } catch(e) {
+    setTxStatus("fail", "Tx failed: " + (e.shortMessage || e.message || "unknown error"));
+    showToast("Transaction failed", "error");
+  }
+}
+
+function addToLocalHistory(op, a, b, res) {
+  const list = document.getElementById("historyList");
+  const empty = list.querySelector("p");
+  if (empty) empty.remove();
+  const item = document.createElement("div");
+  item.className = "history-item";
+  item.innerHTML = `
+    <span class="op-tag">${op}</span>
+    <span>${Number(a).toPrecision(5)} · ${Number(b).toPrecision(5)}</span>
+    <span class="res">= ${formatResult(Number(res))}</span>`;
+  list.prepend(item);
+}
+
+function setTxStatus(state, msg) {
+  const el = document.getElementById("txStatus");
+  el.className = state;
+  document.getElementById("txMsg").textContent = msg;
+}
+
+async function loadHistory() {
+  if (!contract || !walletAddress) return;
+  try {
+    const idxs = await contract.getUserComputations(walletAddress);
+    const list = document.getElementById("historyList");
+    list.innerHTML = "";
+    if (!idxs.length) { list.innerHTML = '<p style="font-family:var(--mono);font-size:.75rem;color:var(--muted);">No computations yet.</p>'; return; }
+    for (let i = idxs.length-1; i >= Math.max(0, idxs.length-30); i--) {
+      const c = await contract.history(idxs[i]);
+      const item = document.createElement("div");
+      item.className = "history-item";
+      item.innerHTML = `
+        <span class="op-tag">${c[1]}</span>
+        <span>${fmtScaled(c[2])} · ${fmtScaled(c[3])}</span>
+        <span class="res">= ${fmtScaled(c[4])}</span>`;
+      list.appendChild(item);
+    }
+  } catch(e) { console.warn(e); }
+}
+
+function fmtScaled(bn) {
+  const n = Number(bn) / 1_000_000;
+  return parseFloat(n.toPrecision(8)).toString();
+}
+
+// ══════════════════════════════════════════════
+//  Mini App Builder
+// ══════════════════════════════════════════════
+const TEMPLATES = {
+  counter: {
+    config: JSON.stringify({ type:"counter", label:"Click Counter", theme:"dark", color:"#0052ff" }, null, 2),
+    html: `<style>body{margin:0;background:#0e0e18;color:#e8e8f0;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh;}</style>
+<div style="text-align:center">
+  <div id="c" style="font-size:5rem;font-weight:800;color:#0052ff">0</div>
+  <button onclick="document.getElementById('c').textContent=+document.getElementById('c').textContent+1"
+    style="margin-top:16px;padding:12px 32px;background:#0052ff;border:none;border-radius:8px;color:#fff;font-size:1rem;cursor:pointer">
+    +1 on Base
+  </button>
+</div>`
+  },
+  swap: {
+    config: JSON.stringify({ type:"swap", tokenA:"ETH", tokenB:"USDC", dex:"BaseSwap", theme:"dark" }, null, 2),
+    html: `<style>body{margin:0;background:#06060a;color:#e8e8f0;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh;}</style>
+<div style="background:#0e0e18;border:1px solid #1e1e32;border-radius:12px;padding:24px;width:320px">
+  <h3 style="margin-bottom:16px;color:#00d4ff">⇄ Token Swap</h3>
+  <input placeholder="0.0 ETH" style="width:100%;background:#08081a;border:1px solid #1e1e32;border-radius:8px;padding:10px;color:#e8e8f0;margin-bottom:8px">
+  <input placeholder="0.0 USDC" style="width:100%;background:#08081a;border:1px solid #1e1e32;border-radius:8px;padding:10px;color:#e8e8f0;margin-bottom:14px">
+  <button style="width:100%;background:#0052ff;border:none;border-radius:8px;padding:12px;color:#fff;cursor:pointer;font-size:1rem">Swap on Base</button>
+</div>`
+  },
+  nft: {
+    config: JSON.stringify({ type:"nft", collection:"Base NFT", tokenId:1, theme:"dark" }, null, 2),
+    html: `<style>body{margin:0;background:#06060a;color:#e8e8f0;font-family:monospace;display:flex;align-items:center;justify-content:center;height:100vh;}</style>
+<div style="background:#0e0e18;border:1px solid #1e1e32;border-radius:16px;overflow:hidden;width:260px">
+  <div style="height:260px;background:linear-gradient(135deg,#0052ff,#00d4ff);display:flex;align-items:center;justify-content:center;font-size:5rem">⬡</div>
+  <div style="padding:16px">
+    <div style="font-weight:700">Base NFT #0001</div>
+    <div style="color:#5a5a7a;font-size:.8rem;margin-top:4px">Base Network</div>
+    <button style="width:100%;margin-top:12px;background:#0052ff;border:none;border-radius:8px;padding:10px;color:#fff;cursor:pointer">Mint</button>
+  </div>
+</div>`
+  },
+  vote: {
+    config: JSON.stringify({ type:"dao-vote", proposal:"Should we expand to Base?", options:["Yes","No","Abstain"], quorum:51 }, null, 2),
+    html: `<style>body{margin:0;background:#06060a;color:#e8e8f0;font-family:monospace;padding:24px;}</style>
+<div style="max-width:380px;margin:0 auto">
+  <h3 style="color:#00d4ff;margin-bottom:6px">⬡ DAO Vote</h3>
+  <p style="color:#5a5a7a;margin-bottom:20px;font-size:.85rem">Should we expand to Base?</p>
+  <button onclick="vote(this,'Yes')" style="display:block;width:100%;background:#0e0e18;border:1px solid #1e1e32;border-radius:8px;padding:12px;color:#e8e8f0;cursor:pointer;margin-bottom:8px;text-align:left">👍 Yes</button>
+  <button onclick="vote(this,'No')"  style="display:block;width:100%;background:#0e0e18;border:1px solid #1e1e32;border-radius:8px;padding:12px;color:#e8e8f0;cursor:pointer;margin-bottom:8px;text-align:left">👎 No</button>
+  <button onclick="vote(this,'Abstain')" style="display:block;width:100%;background:#0e0e18;border:1px solid #1e1e32;border-radius:8px;padding:12px;color:#e8e8f0;cursor:pointer;text-align:left">🤍 Abstain</button>
+  <div id="r" style="margin-top:14px;color:#00e676;font-size:.85rem"></div>
+</div>
+<script>function vote(b,v){document.getElementById('r').textContent='✓ Voted: '+v;}<\/script>`
+  }
+};
+
+function loadTemplate() {
+  const t = document.getElementById("appTemplate").value;
+  if (!t || !TEMPLATES[t]) return;
+  document.getElementById("appConfig").value = TEMPLATES[t].config;
+  document.getElementById("appHtml").value   = TEMPLATES[t].html;
+  updatePreview();
+}
+
+function updatePreview() {
+  const html = document.getElementById("appHtml").value;
+  document.getElementById("previewFrame").srcdoc = html || "<p style='padding:20px;color:#666;font-family:monospace'>Preview…</p>";
+}
+
+async function deployApp() {
+  if (!contract) { showToast("Connect wallet first", "error"); return; }
+  const name   = document.getElementById("appName").value.trim();
+  const config = document.getElementById("appConfig").value.trim();
+  if (!name)   { showToast("Enter an app name", "error"); return; }
+  if (!config) { showToast("Add a config JSON", "error"); return; }
+
+  const btn = document.getElementById("deployBtn");
+  btn.disabled = true;
+  btn.textContent = "⏳ Deploying…";
+  setTxStatus("pending","Deploying mini app to Base…");
+  try {
+    const tx = await contract.deployMiniApp(name, config);
+    setTxStatus("pending",`Tx: ${tx.hash.slice(0,14)}…`);
+    const receipt = await tx.wait();
+    setTxStatus("success",`✓ App deployed | Block ${receipt.blockNumber}`);
+    showToast(`✓ "${name}" deployed on Base!`, "success");
+    document.getElementById("appName").value = "";
+    loadApps();
+  } catch(e) {
+    setTxStatus("fail","Deploy failed: "+(e.shortMessage||e.message));
+    showToast("Deploy failed", "error");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "⬡ Deploy to Base";
+  }
+}
+
+async function loadApps() {
+  if (!contract || !walletAddress) return;
+  try {
+    const idxs = await contract.getUserApps(walletAddress);
+    const list = document.getElementById("appsList");
+    const count = document.getElementById("appCount");
+    count.textContent = idxs.length;
+    list.innerHTML = "";
+    if (!idxs.length) {
+      list.innerHTML = '<p style="font-family:var(--mono);font-size:.75rem;color:var(--muted);">No apps deployed yet.</p>';
+      return;
+    }
+    for (let i = idxs.length-1; i >= 0; i--) {
+      const app = await contract.miniApps(idxs[i]);
+      const card = document.createElement("div");
+      card.className = "app-card";
+      const d = new Date(Number(app[3]) * 1000).toLocaleString();
+      card.innerHTML = `
+        <div class="app-card-header">
+          <span class="app-card-name">${escHtml(app[1])}</span>
+          <span class="app-badge ${app[4]?'':'inactive'}">${app[4]?'Active':'Paused'}</span>
+        </div>
+        <div class="app-config">${escHtml(app[2].slice(0,200))}${app[2].length>200?'…':''}</div>
+        <div class="app-meta">ID #${idxs[i]} · ${d} · <a href="https://basescan.org/address/${CONTRACT_ADDRESS}" target="_blank" style="color:var(--accent2)">Basescan ↗</a></div>`;
+      list.appendChild(card);
+    }
+  } catch(e) { console.warn(e); }
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+// ══════════════════════════════════════════════
+//  UI helpers
+// ══════════════════════════════════════════════
+function switchTab(id, el) {
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
+  el.classList.add("active");
+  document.getElementById("panel-"+id).classList.add("active");
+}
+
+function showToast(msg, type="") {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = "show " + type;
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.className = "", 3500);
+}
+
+// Keyboard support
+document.addEventListener("keydown", e => {
+  if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA") return;
+  if ("0123456789.".includes(e.key)) appendVal(e.key);
+  else if (e.key === "+") appendOp("+");
+  else if (e.key === "-") appendOp("-");
+  else if (e.key === "*") appendOp("*");
+  else if (e.key === "/") { e.preventDefault(); appendOp("/"); }
+  else if (e.key === "Enter" || e.key === "=") evaluate();
+  else if (e.key === "Backspace") deleteLast();
+  else if (e.key === "Escape") clearAll();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "accountAssociation": {
+    "header": "eyJ0eXBlIjoiY3VzdG9keSIsImtleSI6IjB4ZEJGNDVBRjFjRDM3ZGVCRUREMDU5QkVlMDUyNTI4OWQyYjVFNUNGNCJ9",
+    "payload": "eyJkb21haW4iOiJzY2llbnRpZmljLWNhbGN1bGF0b3ItdHdvLWl2b3J5LnZlcmNlbC5hcHAifQ",
+    "signature": "SIGN_REQUIRED"
+  },
+  "miniapp": {
+    "version": "1",
+    "name": "BaseCalc",
+    "homeUrl": "https://scientific-calculator-two-ivory.vercel.app",
+    "iconUrl": "https://scientific-calculator-two-ivory.vercel.app/icon.png",
+    "splashImageUrl": "https://scientific-calculator-two-ivory.vercel.app/splash.png",
+    "splashBackgroundColor": "#06060a",
+    "subtitle": "Scientific Calculator on Base",
+    "description": "Every calculation triggers a real Base transaction. Built-in Mini App Builder lets you deploy on-chain configs.",
+    "primaryCategory": "finance",
+    "tags": ["calculator", "defi", "base", "tools"],
+    "tagline": "Compute on-chain",
+    "ogTitle": "BaseCalc × Mini App Builder",
+    "ogDescription": "Scientific calculator DApp — every computation logs on Base.",
+    "ogImageUrl": "https://scientific-calculator-two-ivory.vercel.app/og.png"
+  }
+}
